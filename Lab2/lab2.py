@@ -6,21 +6,22 @@ import torch.nn as nn
 import time
 import torch.optim as optim
 
+
 def lab2(device):
     print("using device:", device)
 
     if device.type == "cuda":
         print(torch.cuda.get_device_name(0))
 
-
-    transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
+    transform = transforms.Compose(
+        [transforms.Resize((224, 224)), transforms.ToTensor()]
+    )
 
     dataset = datasets.FakeData(
         size=8000, image_size=(3, 224, 224), num_classes=10, transform=transform
     )
 
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
-
 
     # Train Model
     model = resnet50(weights=None)
@@ -48,7 +49,8 @@ def lab2(device):
     end = time.time()
     print(f"{device.type} Training time (seconds): ", end - start)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     device = torch.device("cuda")
     lab2(device)
     device = torch.device("cpu")
