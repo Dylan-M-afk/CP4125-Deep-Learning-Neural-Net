@@ -51,7 +51,8 @@ def lab2(device):
 
 
 if __name__ == "__main__":
-    device = torch.device("cuda")
-    lab2(device)
+    print(torch.cuda.is_available())
     device = torch.device("cpu")
+    lab2(device)
+    device = torch.device("cuda")
     lab2(device)
