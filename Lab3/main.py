@@ -68,6 +68,41 @@ def build_dataset():
 
     return train_loader, val_loader, test_loader
 
+def build_dataset_real_data():
+    transform = transforms.Compose([
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
+    # Use CIFAR-10 (first 5 classes)
+    train_full = datasets.CIFAR10(root='./data', train=True, 
+                                   download=True, transform=transform)
+    test_full = datasets.CIFAR10(root='./data', train=False, 
+                                  download=True, transform=transform)
+    
+    # Keep only first 5 classes (airplane, automobile, bird, cat, deer)
+    train_idx = [i for i, (_, y) in enumerate(train_full) if y < 5]
+    test_idx = [i for i, (_, y) in enumerate(test_full) if y < 5]
+    
+    train_data = torch.utils.data.Subset(train_full, train_idx)
+    test_dataset = torch.utils.data.Subset(test_full, test_idx)
+    
+    # Split train into train + val (70/15 ratio)
+    val_size = int(0.15 / 0.85 * len(train_data))
+    train_size = len(train_data) - val_size
+    
+    train_dataset, val_dataset = random_split(
+        train_data, [train_size, val_size],
+        generator=torch.Generator().manual_seed(RANDOM_SEED)
+    )
+    
+    # Dataloaders
+    train_loader = DataLoader(train_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=False)
+    
+    return train_loader, val_loader, test_loader
 
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_dim, num_hidden_layers, dropout_p):
