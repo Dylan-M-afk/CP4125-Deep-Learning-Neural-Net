@@ -6,7 +6,6 @@ from torchvision import datasets, transforms
 from torch.utils.data import random_split, DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
-from collections import defaultdict
 
 RANDOM_SEED = 1236
 NUM_SAMPLES = 10000
