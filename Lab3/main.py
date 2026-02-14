@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
 
-RANDOM_SEED = 41
+RANDOM_SEED = 1236
 NUM_SAMPLES = 10000
 TRAIN_SIZE = int(0.70 * NUM_SAMPLES)
 VALIDATION_SIZE = int(0.15 * NUM_SAMPLES)
@@ -46,7 +46,6 @@ def set_seed(seed):
 def build_dataset():
     transform = transforms.ToTensor()
 
-    # Dataset
     dataset = datasets.FakeData(
         size=NUM_SAMPLES,
         image_size=(3, 64, 64),
@@ -54,14 +53,12 @@ def build_dataset():
         transform=transform
     )
 
-    # Train, Validation, Test Split
     train_dataset, val_dataset, test_dataset = random_split(
         dataset,
         [TRAIN_SIZE, VALIDATION_SIZE, TEST_SIZE],
         generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
 
-    # Create Loaders
     train_loader = DataLoader(train_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=False)
@@ -81,7 +78,7 @@ def build_dataset_real_data():
     test_full = datasets.CIFAR10(root='./data', train=False, 
                                   download=True, transform=transform)
     
-    # Keep only first 5 classes (airplane, automobile, bird, cat, deer)
+    # Keep only first 5 classes
     train_idx = [i for i, (_, y) in enumerate(train_full) if y < 5]
     test_idx = [i for i, (_, y) in enumerate(test_full) if y < 5]
     
@@ -96,8 +93,7 @@ def build_dataset_real_data():
         train_data, [train_size, val_size],
         generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
-    
-    # Dataloaders
+
     train_loader = DataLoader(train_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=DATALOADER_BATCH_SIZE, shuffle=False)
@@ -117,7 +113,6 @@ class MLP(nn.Module):
         if dropout_p > 0:
             layers.append(nn.Dropout(dropout_p))
 
-        # Additional hidden layers
         for _ in range(num_hidden_layers - 1):
             layers.append(nn.Linear(hidden_dim, hidden_dim))
             layers.append(nn.ReLU())
@@ -125,7 +120,6 @@ class MLP(nn.Module):
             if dropout_p > 0:
                 layers.append(nn.Dropout(dropout_p))
 
-        # Output layer (logits for 5 classes)
         layers.append(nn.Linear(hidden_dim, 5))
 
         self.net = nn.Sequential(*layers)
@@ -206,7 +200,6 @@ def train_model(model, train_loader, val_loader, device, epochs=TRAINING_EPOCHS)
         # Validation
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
 
-        # Record history
         history['train_loss'].append(train_loss)
         history['train_acc'].append(train_acc)
         history['val_loss'].append(val_loss)
@@ -222,18 +215,13 @@ def train_model(model, train_loader, val_loader, device, epochs=TRAINING_EPOCHS)
 def run_experiment(model_name, num_layers, dropout_p, train_loader, val_loader, test_loader, device):
     print(f"Running {model_name}: {num_layers} layers, dropout={dropout_p}")
 
-    # Reset seed for each experiment
-    set_seed(RANDOM_SEED)
-
-    # Create model
-    input_dim = 3 * 64 * 64  # Flattened image
+    input_dim = 3 * 64 * 64
     model = MLP(input_dim, HIDDEN_DIM, num_layers, dropout_p).to(device)
 
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params:,}")
 
-    # Train
     history = train_model(model, train_loader, val_loader, device)
 
     # Final test evaluation
@@ -261,7 +249,6 @@ def run_experiment(model_name, num_layers, dropout_p, train_loader, val_loader, 
 def plot_results(results):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-    # Plot accuracy curves
     for result in results:
         name = result['name']
         history = result['history']
@@ -276,7 +263,6 @@ def plot_results(results):
     ax1.legend(loc='best', fontsize=9)
     ax1.grid(True, alpha=0.3)
 
-    # Plot loss curves
     for result in results:
         name = result['name']
         history = result['history']
@@ -298,19 +284,15 @@ def plot_results(results):
 
 
 def print_results_table(results):
-    print("\n" + "="*80)
-    print("FINAL RESULTS TABLE")
-    print("="*80)
+    print("\n")
+    print("Results Table")
     print(f"{'Model':<6} {'Layers':<8} {'Dropout':<10} {'Train Acc':<12} {'Val Acc':<12} {'Test Acc':<12}")
-    print("-"*80)
 
     for result in results:
         print(f"{result['name']:<6} {result['num_layers']:<8} {result['dropout']:<10.1f} "
               f"{result['history']['train_acc'][-1]:<12.2f} "
               f"{result['history']['val_acc'][-1]:<12.2f} "
               f"{result['test_acc']:<12.2f}")
-
-    print("="*80)
 
 
 if __name__ == "__main__":
@@ -327,7 +309,6 @@ if __name__ == "__main__":
     print(f"  Hidden dimension: {HIDDEN_DIM}")
     print(f"  Learning rate: {LEARNING_RATE}")
 
-    # Run all four experiments
     results = []
 
     # M1: 1 layer, no dropout
@@ -342,8 +323,5 @@ if __name__ == "__main__":
     # M4: 5 layers, dropout 0.4
     results.append(run_experiment("M4", 5, 0.4, train_loader, val_loader, test_loader, device))
 
-    # Print final results table
     print_results_table(results)
-
-    # Create visualizations
     plot_results(results)
