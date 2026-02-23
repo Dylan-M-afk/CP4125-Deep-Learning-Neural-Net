@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 RANDOM_SEED = 1236
-NUM_SAMPLES = 10000
+NUM_SAMPLES = 1000
 TRAIN_SIZE = int(0.70 * NUM_SAMPLES)
 VALIDATION_SIZE = int(0.15 * NUM_SAMPLES)
 TEST_SIZE = NUM_SAMPLES - TRAIN_SIZE - VALIDATION_SIZE
 DATALOADER_BATCH_SIZE = 32
 TRAINING_EPOCHS = 10
 HIDDEN_DIM = 256
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 
 
 def check_cuda():
@@ -237,6 +237,7 @@ def run_experiment(model_name, num_layers, dropout_p, train_loader, val_loader, 
 
     return {
         'name': model_name,
+        'model': model,
         'history': history,
         'test_acc': test_acc,
         'test_loss': test_loss,
@@ -245,82 +246,67 @@ def run_experiment(model_name, num_layers, dropout_p, train_loader, val_loader, 
     }
 
 
-def plot_results(results):
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+def get_confidence(model, data_loader, device):
+    model.eval()
+    confidences, predictions, labels_all = [], [], []
 
-    for result in results:
-        name = result['name']
-        history = result['history']
-        epochs = range(1, len(history['train_acc']) + 1)
+    with torch.no_grad():
+        for inputs, labels in data_loader:
+            inputs = inputs.to(device)
+            logits = model(inputs)
+            probs = F.softmax(logits, dim=1)
 
-        ax1.plot(epochs, history['train_acc'], linestyle='--', label=f"{name} Train", alpha=0.7)
-        ax1.plot(epochs, history['val_acc'], linestyle='-', label=f"{name} Val", linewidth=2)
+            max_probs, preds = torch.max(probs, dim=1)
+            confidences.extend(max_probs.cpu().numpy())
+            predictions.extend(preds.cpu().numpy())
+            labels_all.extend(labels.numpy())
 
-    ax1.set_xlabel('Epoch', fontsize=12)
-    ax1.set_ylabel('Accuracy (%)', fontsize=12)
-    ax1.set_title('Training vs Validation Accuracy', fontsize=14, fontweight='bold')
-    ax1.legend(loc='best', fontsize=9)
-    ax1.grid(True, alpha=0.3)
+    return np.array(confidences), np.array(predictions), np.array(labels_all)
 
-    for result in results:
-        name = result['name']
-        history = result['history']
-        epochs = range(1, len(history['train_loss']) + 1)
 
-        ax2.plot(epochs, history['train_loss'], linestyle='--', label=f"{name} Train", alpha=0.7)
-        ax2.plot(epochs, history['val_loss'], linestyle='-', label=f"{name} Val", linewidth=2)
-
-    ax2.set_xlabel('Epoch', fontsize=12)
-    ax2.set_ylabel('Loss', fontsize=12)
-    ax2.set_title('Training vs Validation Loss', fontsize=14, fontweight='bold')
-    ax2.legend(loc='best', fontsize=9)
-    ax2.grid(True, alpha=0.3)
-
+def plot_histogram(conf_m2, conf_m4):
+    plt.figure(figsize=(8, 5))
+    plt.hist(conf_m2, bins=30, alpha=0.6, label="M2 (no dropout)")
+    plt.hist(conf_m4, bins=30, alpha=0.6, label="M4 (dropout p=0.4)")
+    plt.xlabel("Prediction Confidence")
+    plt.ylabel("Number of Samples")
+    plt.title("Confidence Distribution (Test Set)")
+    plt.legend()
+    plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig('learning_curves.png', dpi=300, bbox_inches='tight')
-    print("\nLearning curves saved to 'learning_curves.png'")
+    plt.savefig("confidence_histogram.png", dpi=300)
     plt.close()
 
 
-def print_results_table(results):
-    print("\n")
-    print("Results Table")
-    print(f"{'Model':<6} {'Layers':<8} {'Dropout':<10} {'Train Acc':<12} {'Val Acc':<12} {'Test Acc':<12}")
-
-    for result in results:
-        print(f"{result['name']:<6} {result['num_layers']:<8} {result['dropout']:<10.1f} "
-              f"{result['history']['train_acc'][-1]:<12.2f} "
-              f"{result['history']['val_acc'][-1]:<12.2f} "
-              f"{result['test_acc']:<12.2f}")
-
+def mean_confidence_per_class(confidences, labels):
+    for c in range(5):
+        class_conf = confidences[labels == c]
+        print(f"Class {c}: mean confidence = {class_conf.mean():.3f}")
 
 if __name__ == "__main__":
     device = check_cuda()
     set_seed(RANDOM_SEED)
     train_loader, val_loader, test_loader = build_dataset()
 
-    print(f"\nDataset Info:")
-    print(f"  Train samples: {len(train_loader.dataset)}")
-    print(f"  Val samples: {len(val_loader.dataset)}")
-    print(f"  Test samples: {len(test_loader.dataset)}")
-    print(f"  Batch size: {DATALOADER_BATCH_SIZE}")
-    print(f"  Training epochs: {TRAINING_EPOCHS}")
-    print(f"  Hidden dimension: {HIDDEN_DIM}")
-    print(f"  Learning rate: {LEARNING_RATE}")
-
     results = []
-
-    # M1: 1 layer, no dropout
-    results.append(run_experiment("M1", 1, 0.0, train_loader, val_loader, test_loader, device))
-
-    # M2: 3 layers, no dropout
+    # results.append(run_experiment("M1", 1, 0.0, train_loader, val_loader, test_loader, device))
     results.append(run_experiment("M2", 3, 0.0, train_loader, val_loader, test_loader, device))
-
-    # M3: 5 layers, no dropout
-    results.append(run_experiment("M3", 5, 0.0, train_loader, val_loader, test_loader, device))
-
-    # M4: 5 layers, dropout 0.4
+    # results.append(run_experiment("M3", 5, 0.0, train_loader, val_loader, test_loader, device))
     results.append(run_experiment("M4", 5, 0.4, train_loader, val_loader, test_loader, device))
 
-    print_results_table(results)
-    plot_results(results)
+    m2 = next(r for r in results if r['name'] == "M2")
+    m4 = next(r for r in results if r['name'] == "M4")
+
+    conf_m2, preds_m2, labels_m2 = get_confidence(m2['model'], test_loader, device)
+    conf_m4, preds_m4, labels_m4 = get_confidence(m4['model'], test_loader, device)
+
+    plot_histogram(conf_m2, conf_m4)
+
+    print(f"\nM2 mean confidence: {conf_m2.mean():.3f}")
+    print(f"M4 mean confidence: {conf_m4.mean():.3f}")
+
+    print("\nM2 confidence per class:")
+    mean_confidence_per_class(conf_m2, labels_m2)
+
+    print("\nM4 confidence per class:")
+    mean_confidence_per_class(conf_m4, labels_m4)
